@@ -8,3 +8,21 @@ wheels/
 
 # Virtual environments
 .venv
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Output directories
+output/
+*_output/
+test_*/
+unused/
+
+# UV lockfile
+uv.lock

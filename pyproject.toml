@@ -1,7 +1,15 @@
 [project]
 name = "lmbatch"
 version = "0.1.0"
-description = "Add your description here"
+description = "Batch process text files through LM Studio's local LLM server"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "requests>=2.31.0",
+    "click>=8.1.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.66.0",
+]
+
+[project.scripts]
+lmbatch = "main:main"

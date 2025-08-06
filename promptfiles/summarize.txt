@@ -1,0 +1,6 @@
+Please provide a concise summary of the following text. Focus on the main points and key information:
+
+Instructions:
+- Keep the summary under 150 words
+- Highlight the most important concepts
+- Use clear, simple language

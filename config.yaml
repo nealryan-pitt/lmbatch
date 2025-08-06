@@ -1,0 +1,45 @@
+# LM Batch Configuration File
+# This file contains default settings that can be overridden by command-line arguments
+# or environment variables.
+
+lm_studio:
+  # LM Studio server URL
+  server_url: "http://localhost:1234"
+  
+  # Model to use
+  model: "gpt-oss-20b"
+  
+  # Request timeout in seconds
+  timeout: 30
+  
+  # Number of retry attempts for failed requests
+  retry_attempts: 3
+  
+  # Base delay between retries (exponential backoff)
+  retry_delay: 1.0
+
+processing:
+  # Sampling temperature for text generation (0.0 = deterministic, 1.0 = very creative)
+  temperature: 0.1
+  
+  # Maximum number of tokens to generate
+  max_tokens: 32000
+  
+  # Number of concurrent requests to process in parallel
+  concurrent_requests: 3
+  
+  # Chunk size for reading large files (bytes)
+  chunk_size: 8192
+  
+  # Maximum context length in tokens (input + output)
+  max_context_length: 3000
+
+output:
+  # Default output directory
+  directory: "output"
+  
+  # Whether to overwrite existing files
+  overwrite: false
+  
+  # Whether to include processing metadata in output files
+  include_metadata: true
