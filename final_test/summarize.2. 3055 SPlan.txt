@@ -1,0 +1,23 @@
+<!-- LM Batch Processing Metadata
+processed_at: 2025-08-06T11:53:03.943370
+prompt_file: promptfiles/summarize.txt
+source_file: txtfiles/2. 3055 SPlan.txt
+model: default
+temperature: 0.1
+max_tokens: 32000
+tokens_used: 3823
+-->
+
+<|channel|>analysis<|message|>We need concise summary under 150 words. Focus main points and key info. The text is a transcript of therapy session with Sienna about safety plan. Key concepts: daily dose (temperature check, coping skills practice), reasons for living, triggers identification, avoidance strategies, coping skills list, people to reach out to (crisis line, mom, brother), environment safety (razors hidden). Also mention specific coping skills like watching TV, bath, drawing, music, deep breathing. Mention triggers: arguments, remembering past negative events. Avoidance: communicate feelings, avoid texting until calm, distraction. Reasons for living: being there for sister, becoming psychologist, family. So summary 140 words.
+
+Let's craft.<|end|><|start|>assistant<|channel|>final<|message|>**Summary**
+
+Sienna’s safety plan focuses on daily emotional monitoring (“daily dose”), coping skills, and support networks to prevent self‑harm.  
+- **Daily Dose:** She will rate her mood each day and practice a chosen coping skill (e.g., deep breathing, going outside) even when feeling fine, so the skill is readily available in crisis.  
+- **Coping Skills:** Watching TV, bathing, drawing/painting, listening to music, and deep breathing are identified as useful tools for managing distress.  
+- **Triggers & Avoidance:** Arguments with people and recalling negative past events trigger suicidal thoughts. She plans to express discomfort early, limit contact until calm, and use distraction or positive memories to shift focus.  
+- **Reasons for Living:** Family (sister, parents, brother) and future goals (becoming a psychologist, being supportive).  
+- **Support Contacts:** Crisis text line, Resolve, her mother, and brother are listed as people she can reach out to if needed.  
+- **Environment Safety:** Her dad keeps razors and other sharp objects out of reach; medication is stored safely with her dad.  
+
+The plan integrates monitoring, skill practice, trigger management, meaningful reasons for living, and a clear safety network.

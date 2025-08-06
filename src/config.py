@@ -21,7 +21,26 @@ class Config:
             'max_tokens': 32000,
             'concurrent_requests': 3,
             'chunk_size': 8192,
-            'max_context_length': 3000,
+            'max_context_length': 16384,  # Larger default for therapeutic analysis
+        },
+        'context_handling': {
+            'strategy': 'force',  # Send full content by default for therapeutic analysis
+            'auto_detect': True,
+            'safety_margin': 500,
+            'overlap_tokens': 300,
+            'warn_on_truncation': True,
+            'ctx_size': 16384,  # Default LM Studio context size
+        },
+        'model_presets': {
+            'gpt-oss-20b': 16384,
+            'openai/gpt-oss-20b': 16384,
+            'gpt-oss-120b': 16384,
+            'openai/gpt-oss-120b': 16384,
+            'llama-3.3-70b': 32768,
+            'meta/llama-3.3-70b': 32768,
+            'qwen2.5-72b-instruct': 32768,
+            'qwen/qwen2.5-72b-instruct': 32768,
+            'default': 16384,
         },
         'output': {
             'directory': 'output',
@@ -134,3 +153,42 @@ class Config:
     def output(self) -> Dict[str, Any]:
         """Get output configuration."""
         return self._config['output']
+    
+    @property
+    def context_handling(self) -> Dict[str, Any]:
+        """Get context handling configuration."""
+        return self._config['context_handling']
+    
+    @property
+    def model_presets(self) -> Dict[str, Any]:
+        """Get model preset configurations."""
+        return self._config['model_presets']
+    
+    def get_model_context_length(self, model_name: str) -> int:
+        """Get context length for a specific model.
+        
+        Args:
+            model_name: Name of the model
+        
+        Returns:
+            Context length in tokens
+        """
+        presets = self.model_presets
+        
+        # Try exact match first
+        if model_name in presets:
+            return presets[model_name]
+        
+        # Try without provider prefix (e.g. "openai/gpt-oss-20b" -> "gpt-oss-20b")
+        if '/' in model_name:
+            base_name = model_name.split('/')[-1]
+            if base_name in presets:
+                return presets[base_name]
+        
+        # Try partial matches for common patterns
+        for preset_name, context_length in presets.items():
+            if preset_name != 'default' and preset_name in model_name:
+                return context_length
+        
+        # Fall back to default
+        return presets['default']

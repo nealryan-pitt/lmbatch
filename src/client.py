@@ -10,7 +10,7 @@ from requests.packages.urllib3.util.retry import Retry
 class LMStudioClient:
     """Client for interacting with LM Studio's OpenAI-compatible API."""
     
-    def __init__(self, server_url: str, timeout: int = 30, retry_attempts: int = 3, retry_delay: float = 1.0):
+    def __init__(self, server_url: str, timeout: int = 30, retry_attempts: int = 3, retry_delay: float = 1.0, ctx_size: int = None):
         """Initialize LM Studio client.
         
         Args:
@@ -18,11 +18,13 @@ class LMStudioClient:
             timeout: Request timeout in seconds
             retry_attempts: Number of retry attempts
             retry_delay: Base delay between retries
+            ctx_size: Context size to use for model loading
         """
         self.server_url = server_url.rstrip('/')
         self.timeout = timeout
         self.retry_attempts = retry_attempts
         self.retry_delay = retry_delay
+        self.ctx_size = ctx_size
         
         # Set up session with retry strategy
         self.session = requests.Session()
@@ -39,6 +41,7 @@ class LMStudioClient:
         # API endpoints
         self.chat_endpoint = f"{self.server_url}/v1/chat/completions"
         self.models_endpoint = f"{self.server_url}/v1/models"
+        self.load_model_endpoint = f"{self.server_url}/v1/models/load"
     
     def health_check(self) -> bool:
         """Check if LM Studio server is running and accessible.
@@ -68,6 +71,55 @@ class LMStudioClient:
             return data.get('data', [])
         except Exception as e:
             raise Exception(f"Failed to fetch models: {str(e)}")
+    
+    def load_model_with_context(self, model_name: str, ctx_size: int = None) -> bool:
+        """Load a model with specific context size in LM Studio using CLI.
+        
+        Args:
+            model_name: Name of the model to load
+            ctx_size: Context size to use
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if ctx_size is None:
+            ctx_size = self.ctx_size or 16384
+            
+        try:
+            import subprocess
+            
+            # Use LM Studio CLI to load model with context size
+            cmd = ["lms", "load", model_name, "--context-length", str(ctx_size)]
+            
+            print(f"Executing: {' '.join(cmd)}")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode == 0:
+                print(f"Successfully loaded model '{model_name}' with context length {ctx_size}")
+                time.sleep(2)  # Give the model time to fully load
+                return True
+            else:
+                print(f"Failed to load model with context size {ctx_size}:")
+                print(f"stdout: {result.stdout}")
+                print(f"stderr: {result.stderr}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            print(f"Timeout while loading model with context size {ctx_size}")
+            return False
+        except FileNotFoundError:
+            print("LM Studio CLI 'lms' command not found. Please ensure LM Studio CLI is installed and in PATH.")
+            print("You can install it from LM Studio > Developer tab > Install CLI tools")
+            return False
+        except Exception as e:
+            print(f"Error loading model with context size: {str(e)}")
+            return False
     
     def send_request(self, 
                     prompt: str, 

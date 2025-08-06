@@ -127,49 +127,194 @@ class FileManager:
         except Exception as e:
             raise Exception(f"Failed to read text file {file_path}: {str(e)}")
     
-    def combine_prompt_and_text(self, prompt_content: str, text_content: str, max_context_length: int = 3000) -> str:
+    def combine_prompt_and_text(self, 
+                                  prompt_content: str, 
+                                  text_content: str, 
+                                  max_context_length: int = 8192,
+                                  max_tokens: int = 32000,
+                                  strategy: str = 'fail',
+                                  safety_margin: int = 500,
+                                  warn_on_truncation: bool = True) -> tuple:
         """Combine prompt and text content for processing.
         
         Args:
             prompt_content: The prompt template
             text_content: The text to process
-            max_context_length: Maximum context length in tokens (approximate)
+            max_context_length: Maximum context length in tokens
+            max_tokens: Maximum tokens for response
+            strategy: How to handle oversized content ('fail', 'truncate', 'split', 'force')
+            safety_margin: Tokens to reserve as safety buffer
+            warn_on_truncation: Whether to warn when truncating
         
         Returns:
-            Combined content ready for LLM
+            Tuple of (combined_content, metadata_dict)
+            For split strategy, returns list of (chunk, metadata) tuples
+        
+        Raises:
+            ValueError: If content is too large and strategy is 'fail'
         """
         separator = "\n\n---\n\n"
         
         # Estimate tokens (rough approximation: ~4 chars per token)
         prompt_tokens = len(prompt_content) // 4
         separator_tokens = len(separator) // 4
-        available_tokens = max_context_length - prompt_tokens - separator_tokens - 200  # Reserve 200 tokens for response
+        text_tokens = len(text_content) // 4
+        total_tokens = prompt_tokens + separator_tokens + text_tokens
         
-        if available_tokens <= 0:
-            raise ValueError("Prompt is too long for the specified context length")
+        # Calculate available space
+        response_buffer = min(max_tokens, 2048)  # Reserve reasonable space for response
+        available_tokens = max_context_length - prompt_tokens - separator_tokens - safety_margin - response_buffer
         
-        # Truncate text content if necessary
-        max_text_chars = available_tokens * 4
-        if len(text_content) > max_text_chars:
-            # Truncate and add indication
-            truncated_text = text_content[:max_text_chars].rsplit(' ', 1)[0]  # Don't cut words
-            text_content = f"{truncated_text}\n\n[NOTE: Text was truncated due to context length limits]"
+        metadata = {
+            'prompt_tokens': prompt_tokens,
+            'text_tokens': text_tokens,
+            'total_input_tokens': total_tokens,
+            'context_limit': max_context_length,
+            'available_tokens': available_tokens,
+            'strategy_used': strategy,
+            'was_truncated': False,
+            'was_split': False,
+        }
         
-        return f"{prompt_content}{separator}{text_content}"
+        # Check if content fits
+        if text_tokens <= available_tokens:
+            # Content fits, no modification needed
+            combined = f"{prompt_content}{separator}{text_content}"
+            return combined, metadata
+        
+        # Content is too large, apply strategy
+        if strategy == 'fail':
+            raise ValueError(
+                f"Content too large for context window:\n"
+                f"  Prompt: {prompt_tokens:,} tokens\n"
+                f"  Text: {text_tokens:,} tokens\n" 
+                f"  Total: {total_tokens:,} tokens\n"
+                f"  Context limit: {max_context_length:,} tokens\n"
+                f"  Available for text: {available_tokens:,} tokens\n\n"
+                f"Suggested solutions:\n"
+                f"  1. Use larger context model: --model llama-3.3-70b\n"
+                f"  2. Split processing: --strategy split\n"
+                f"  3. Force send anyway: --strategy force\n"
+                f"  4. Allow truncation: --strategy truncate"
+            )
+        
+        elif strategy == 'force':
+            # Send anyway, let LM Studio handle the overflow
+            combined = f"{prompt_content}{separator}{text_content}"
+            metadata['strategy_used'] = 'force'
+            return combined, metadata
+        
+        elif strategy == 'truncate':
+            # Truncate text content
+            max_text_chars = available_tokens * 4
+            if len(text_content) > max_text_chars:
+                # Truncate at word boundary
+                truncated_text = text_content[:max_text_chars].rsplit(' ', 1)[0]
+                text_content = f"{truncated_text}\n\n[NOTE: Text was truncated due to context length limits - {len(text_content) - len(truncated_text)} characters removed]"
+                metadata['was_truncated'] = True
+                metadata['truncated_chars'] = len(text_content) - len(truncated_text)
+                
+                if warn_on_truncation:
+                    print(f"⚠️  WARNING: Text truncated by {metadata['truncated_chars']} characters to fit context window")
+            
+            combined = f"{prompt_content}{separator}{text_content}"
+            return combined, metadata
+        
+        elif strategy == 'split':
+            # Split into chunks - return list of (chunk, metadata) tuples
+            return self._split_content(prompt_content, text_content, available_tokens, metadata)
+        
+        else:
+            raise ValueError(f"Unknown strategy: {strategy}. Must be one of: fail, truncate, split, force")
     
-    def generate_output_filename(self, prompt_path: str, text_path: str) -> str:
+    def _split_content(self, prompt_content: str, text_content: str, available_tokens: int, base_metadata: dict) -> list:
+        """Split content into processable chunks.
+        
+        Args:
+            prompt_content: The prompt template
+            text_content: The text to split
+            available_tokens: Available tokens per chunk
+            base_metadata: Base metadata to extend
+        
+        Returns:
+            List of (combined_content, metadata) tuples
+        """
+        separator = "\n\n---\n\n"
+        overlap_chars = base_metadata.get('overlap_tokens', 300) * 4  # Convert tokens to chars
+        
+        # Calculate chunk size in characters
+        chunk_size_chars = available_tokens * 4
+        
+        # Split text into chunks with overlap
+        chunks = []
+        text_length = len(text_content)
+        start = 0
+        chunk_num = 1
+        
+        while start < text_length:
+            # Calculate end position
+            end = min(start + chunk_size_chars, text_length)
+            
+            # If not the last chunk, try to break at word boundary
+            if end < text_length:
+                # Find last space within reasonable distance
+                space_pos = text_content.rfind(' ', start, end)
+                if space_pos > start + chunk_size_chars * 0.8:  # Don't break too early
+                    end = space_pos
+            
+            # Extract chunk
+            chunk_text = text_content[start:end]
+            
+            # Add overlap from previous chunk (except for first chunk)
+            if start > 0:
+                overlap_start = max(0, start - overlap_chars)
+                overlap_text = text_content[overlap_start:start]
+                chunk_text = f"[...continued from previous chunk]\n{overlap_text}\n---\n{chunk_text}"
+            
+            # Add continuation indicator if not last chunk
+            if end < text_length:
+                chunk_text += "\n[...continues in next chunk]"
+            
+            # Combine with prompt
+            combined = f"{prompt_content}{separator}[CHUNK {chunk_num} of estimated {(text_length // chunk_size_chars) + 1}]\n\n{chunk_text}"
+            
+            # Create chunk metadata
+            chunk_metadata = base_metadata.copy()
+            chunk_metadata.update({
+                'was_split': True,
+                'chunk_number': chunk_num,
+                'chunk_start': start,
+                'chunk_end': end,
+                'chunk_chars': len(chunk_text),
+                'chunk_tokens': len(chunk_text) // 4,
+            })
+            
+            chunks.append((combined, chunk_metadata))
+            
+            # Move to next chunk (with overlap consideration)
+            start = end
+            chunk_num += 1
+        
+        return chunks
+    
+    def generate_output_filename(self, prompt_path: str, text_path: str, chunk_number: int = None) -> str:
         """Generate output filename based on input files.
         
         Args:
             prompt_path: Path to prompt file
             text_path: Path to text file
+            chunk_number: Chunk number for split processing
         
         Returns:
             Generated output filename
         """
         prompt_name = Path(prompt_path).stem
         text_name = Path(text_path).stem
-        return f"{prompt_name}.{text_name}.txt"
+        
+        if chunk_number is not None:
+            return f"{prompt_name}.{text_name}.chunk{chunk_number}.txt"
+        else:
+            return f"{prompt_name}.{text_name}.txt"
     
     def write_output_file(self, 
                          content: str, 

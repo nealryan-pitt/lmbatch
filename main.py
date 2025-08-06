@@ -48,8 +48,27 @@ from file_manager import FileManager
               help='Number of concurrent requests (default: 3)')
 @click.option('--max-context',
               type=int,
-              default=3000,
-              help='Maximum context length in tokens (default: 3000)')
+              default=16384,
+              help='Maximum context length in tokens (default: 16384, 0=auto-detect)')
+@click.option('--strategy',
+              type=click.Choice(['fail', 'truncate', 'split', 'force']),
+              default='force',
+              help='How to handle oversized content (default: force)')
+@click.option('--auto-detect-context',
+              is_flag=True,
+              help='Auto-detect model context length')
+@click.option('--overlap-tokens',
+              type=int,
+              default=300,
+              help='Overlap tokens for chunking (default: 300)')
+@click.option('--safety-margin',
+              type=int,
+              default=500,
+              help='Safety margin tokens (default: 500)')
+@click.option('--ctx-size',
+              type=int,
+              default=16384,
+              help='Context size for LM Studio model (default: 16384)')
 @click.option('--config',
               type=click.Path(),
               help='Configuration file path (default: config.yaml)')
@@ -63,7 +82,8 @@ from file_manager import FileManager
               is_flag=True,
               help='Overwrite existing output files')
 def main(prompt, input, output, server, model, temperature, max_tokens, 
-         concurrent, max_context, config, verbose, dry_run, overwrite):
+         concurrent, max_context, strategy, auto_detect_context, overlap_tokens, 
+         safety_margin, ctx_size, config, verbose, dry_run, overwrite):
     """Batch process text files through LM Studio's local LLM server.
     
     This tool takes a prompt file and processes one or more text files,
@@ -87,8 +107,25 @@ def main(prompt, input, output, server, model, temperature, max_tokens,
         cfg.set('processing', 'max_tokens', max_tokens)
         cfg.set('processing', 'concurrent_requests', concurrent)
         cfg.set('processing', 'max_context_length', max_context)
+        cfg.set('context_handling', 'strategy', strategy)
+        cfg.set('context_handling', 'auto_detect', auto_detect_context)
+        cfg.set('context_handling', 'overlap_tokens', overlap_tokens)
+        cfg.set('context_handling', 'safety_margin', safety_margin)
+        cfg.set('context_handling', 'ctx_size', ctx_size)
         cfg.set('output', 'directory', output)
         cfg.set('output', 'overwrite', overwrite)
+        
+        # Sync max_context with ctx_size if ctx_size was explicitly set
+        # This ensures the application's context limit matches the model's context size
+        if ctx_size != 16384:  # If ctx_size was changed from default
+            max_context = ctx_size
+            cfg.set('processing', 'max_context_length', max_context)
+        
+        # Handle special case for max_context = 0 (auto-detect)
+        if max_context == 0:
+            cfg.set('context_handling', 'auto_detect', True)
+        else:
+            cfg._override_context_length = max_context
         
     except Exception as e:
         click.echo(f"Error loading configuration: {e}", err=True)
@@ -154,9 +191,29 @@ def main(prompt, input, output, server, model, temperature, max_tokens,
             click.echo(f"Model: {model}")
             click.echo(f"Temperature: {temperature}")
             click.echo(f"Max tokens: {max_tokens}")
+            click.echo(f"Context size: {ctx_size}")
+            
+            # Show context handling info
+            if auto_detect_context or max_context == 0:
+                detected_context = cfg.get_model_context_length(model)
+                click.echo(f"Context length: {detected_context:,} tokens (auto-detected)")
+            else:
+                click.echo(f"Context length: {max_context:,} tokens")
+            
+            click.echo(f"Strategy: {strategy}")
+            if strategy == 'split':
+                click.echo(f"Overlap tokens: {overlap_tokens}")
+            click.echo(f"Safety margin: {safety_margin} tokens")
             click.echo("No files will be processed in dry run mode.")
         else:
-            click.echo(f"\nProcessing {len(input_files)} files...")
+            context_info = ""
+            if auto_detect_context or max_context == 0:
+                detected_context = cfg.get_model_context_length(model)
+                context_info = f" (context: {detected_context:,}, strategy: {strategy})"
+            else:
+                context_info = f" (context: {max_context:,}, strategy: {strategy})"
+            
+            click.echo(f"\nProcessing {len(input_files)} files...{context_info}")
         
         results = processor.process_files(
             prompt_path=prompt,
@@ -192,6 +249,11 @@ def main(prompt, input, output, server, model, temperature, max_tokens,
             if output_summary.get('file_count', 0) > 0:
                 click.echo(f"\nOutput files created in: {output_summary['output_dir']}")
                 click.echo(f"Total output files: {output_summary['file_count']}")
+                
+                # Show chunking summary if applicable
+                total_chunks = sum(result.get('chunks_processed', 1) for result in results.get('results', []) if result['success'])
+                if total_chunks > summary['processed_files']:
+                    click.echo(f"Files were chunked: {total_chunks} total chunks processed")
                 
                 if verbose and len(output_summary.get('files', [])) <= 10:
                     for filename in output_summary['files']:

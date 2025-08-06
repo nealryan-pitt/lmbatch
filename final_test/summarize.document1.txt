@@ -1,0 +1,20 @@
+<!-- LM Batch Processing Metadata
+processed_at: 2025-08-06T11:53:06.581301
+prompt_file: promptfiles/summarize.txt
+source_file: txtfiles/document1.txt
+model: default
+temperature: 0.1
+max_tokens: 32000
+tokens_used: 517
+-->
+
+<|channel|>analysis<|message|>We need concise summary under 150 words, highlight most important concepts, clear simple language. Let's craft ~120 words.<|end|><|start|>assistant<|channel|>final<|message|>Artificial Intelligence (AI) is reshaping the 21st century.  
+- **Core tech**: Machine learning lets computers improve from data; deep learning uses multi‑layer neural networks and powers breakthroughs in vision, language, and speech.  
+- **Key uses**:  
+  - *Healthcare*: diagnosis, drug discovery, personalized care.  
+  - *Transport*: self‑driving cars.  
+  - *Finance*: fraud detection, algorithmic trading.  
+  - *Entertainment*: recommendation engines that suggest movies or music.  
+- **Challenges**: algorithm bias, job loss from automation, privacy risks, and the need for transparent decision‑making.  
+
+The promise of AI is huge, but society must manage its ethical and practical impacts so benefits are shared widely while minimizing harm.

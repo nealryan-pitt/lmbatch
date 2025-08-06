@@ -1,0 +1,13 @@
+<!-- LM Batch Processing Metadata
+processed_at: 2025-08-06T11:53:08.911125
+prompt_file: promptfiles/summarize.txt
+source_file: txtfiles/document2.txt
+model: default
+temperature: 0.1
+max_tokens: 32000
+tokens_used: 506
+-->
+
+<|channel|>analysis<|message|>We need concise summary under 150 words, highlight most important concepts, clear simple language.
+
+Let's craft ~120 words.<|end|><|start|>assistant<|channel|>final<|message|>Climate change is the biggest global challenge today. Human activities—burning fossil fuels, cutting forests, industrial processes, and farming—have raised atmospheric CO₂ by more than 40 % since pre‑industrial times, speeding up warming. The result is melting ice caps, higher sea levels, more extreme weather, and altered rainfall patterns. Visible impacts include rapid Arctic ice loss, coral bleaching, species habitat loss, and flooding or drought in coastal communities. Solving the problem needs worldwide cooperation: shift to renewable energy, boost efficiency, protect forests, and develop carbon‑capture tech. While individual actions matter, lasting change requires systemic shifts in how we produce and use energy.

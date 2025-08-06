@@ -28,7 +28,8 @@ class BatchProcessor:
             server_url=config.lm_studio['server_url'],
             timeout=config.lm_studio['timeout'],
             retry_attempts=config.lm_studio['retry_attempts'],
-            retry_delay=config.lm_studio['retry_delay']
+            retry_delay=config.lm_studio['retry_delay'],
+            ctx_size=config.context_handling.get('ctx_size', 16384)
         )
         
         self.file_manager = FileManager(
@@ -124,6 +125,19 @@ class BatchProcessor:
                     'would_process': len(input_paths),
                     'stats': self.stats
                 }
+            
+            # Load model with specified context size
+            model_name = self.config.lm_studio['model']
+            ctx_size = self.config.context_handling.get('ctx_size', 16384)
+            
+            if self.verbose:
+                print(f"Loading model '{model_name}' with context size {ctx_size}...")
+            
+            if not self.client.load_model_with_context(model_name, ctx_size):
+                if self.verbose:
+                    print(f"Warning: Failed to load model with context size {ctx_size}, continuing with current model...")
+            elif self.verbose:
+                print(f"Successfully loaded model with context size {ctx_size}")
             
             # Process files
             results = []
@@ -278,10 +292,11 @@ class BatchProcessor:
         result = {
             'file_path': file_path,
             'success': False,
-            'output_file': None,
+            'output_files': [],
             'tokens_used': 0,
             'processing_time': 0,
-            'error': None
+            'error': None,
+            'chunks_processed': 0
         }
         
         start_time = time.time()
@@ -290,58 +305,105 @@ class BatchProcessor:
             # Read text file
             text_content = self.file_manager.read_text_file(file_path)
             
-            # Combine prompt and text
-            max_context = self.config.processing.get('max_context_length', 3000)
-            combined_content = self.file_manager.combine_prompt_and_text(
-                prompt_content, text_content, max_context_length=max_context
-            )
+            # Get context handling configuration
+            model_name = self.config.lm_studio['model']
+            context_config = self.config.context_handling
             
-            # Send to LM Studio
-            response = self.client.send_request(
-                prompt=combined_content,
-                model=self.config.lm_studio['model'],
-                temperature=self.config.processing['temperature'],
-                max_tokens=self.config.processing['max_tokens']
-            )
+            # Determine context length
+            if hasattr(self.config, '_override_context_length'):
+                max_context = self.config._override_context_length
+            elif context_config['auto_detect']:
+                max_context = self.config.get_model_context_length(model_name)
+            else:
+                max_context = self.config.processing.get('max_context_length', 8192)
             
-            # Extract response text
-            response_text = self.client.extract_response_text(response)
+            # Combine prompt and text with strategy
+            try:
+                content_result = self.file_manager.combine_prompt_and_text(
+                    prompt_content=prompt_content,
+                    text_content=text_content,
+                    max_context_length=max_context,
+                    max_tokens=self.config.processing['max_tokens'],
+                    strategy=context_config['strategy'],
+                    safety_margin=context_config['safety_margin'],
+                    warn_on_truncation=context_config['warn_on_truncation']
+                )
+            except ValueError as e:
+                # Handle 'fail' strategy
+                result.update({
+                    'error': str(e),
+                    'processing_time': time.time() - start_time
+                })
+                return result
             
-            # Generate output filename
-            output_filename = self.file_manager.generate_output_filename(
-                prompt_path,
-                file_path
-            )
+            # Handle different return types from combine_prompt_and_text
+            if isinstance(content_result, tuple) and len(content_result) == 2:
+                # Single content (not split)
+                combined_content, content_metadata = content_result
+                chunks_to_process = [(combined_content, content_metadata, None)]
+            elif isinstance(content_result, list):
+                # Split content - list of (content, metadata) tuples
+                chunks_to_process = [(content, metadata, idx+1) for idx, (content, metadata) in enumerate(content_result)]
+                result['chunks_processed'] = len(chunks_to_process)
+            else:
+                raise ValueError("Unexpected return type from combine_prompt_and_text")
             
-            # Prepare metadata
-            metadata = None
-            if self.config.output['include_metadata']:
-                metadata = {
-                    'processed_at': datetime.now().isoformat(),
-                    'prompt_file': prompt_path,
-                    'source_file': file_path,
-                    'model': self.config.lm_studio['model'],
-                    'temperature': self.config.processing['temperature'],
-                    'max_tokens': self.config.processing['max_tokens'],
-                    'tokens_used': response.get('usage', {}).get('total_tokens', 0)
-                }
+            # Process each chunk
+            total_tokens = 0
+            output_files = []
             
-            # Write output file
-            output_path = self.file_manager.write_output_file(
-                content=response_text,
-                filename=output_filename,
-                metadata=metadata,
-                overwrite=self.config.output['overwrite']
-            )
+            for chunk_content, chunk_metadata, chunk_num in chunks_to_process:
+                # Send to LM Studio
+                response = self.client.send_request(
+                    prompt=chunk_content,
+                    model=model_name,
+                    temperature=self.config.processing['temperature'],
+                    max_tokens=self.config.processing['max_tokens']
+                )
+                
+                # Extract response text
+                response_text = self.client.extract_response_text(response)
+                
+                # Generate output filename
+                output_filename = self.file_manager.generate_output_filename(
+                    prompt_path, file_path, chunk_num
+                )
+                
+                # Prepare metadata
+                metadata = None
+                if self.config.output['include_metadata']:
+                    metadata = {
+                        'processed_at': datetime.now().isoformat(),
+                        'prompt_file': prompt_path,
+                        'source_file': file_path,
+                        'model': model_name,
+                        'temperature': self.config.processing['temperature'],
+                        'max_tokens': self.config.processing['max_tokens'],
+                        'tokens_used': response.get('usage', {}).get('total_tokens', 0),
+                        'context_length': max_context,
+                        **chunk_metadata  # Include chunk-specific metadata
+                    }
+                
+                # Write output file
+                output_path = self.file_manager.write_output_file(
+                    content=response_text,
+                    filename=output_filename,
+                    metadata=metadata,
+                    overwrite=self.config.output['overwrite']
+                )
+                
+                output_files.append(output_path)
+                total_tokens += response.get('usage', {}).get('total_tokens', 0)
             
             result.update({
                 'success': True,
-                'output_file': output_path,
-                'tokens_used': response.get('usage', {}).get('total_tokens', 0),
+                'output_files': output_files,
+                'output_file': output_files[0] if output_files else None,  # Backwards compatibility
+                'tokens_used': total_tokens,
                 'processing_time': time.time() - start_time
             })
             
-            self.stats['total_tokens'] += result['tokens_used']
+            self.stats['total_tokens'] += total_tokens
         
         except Exception as e:
             result.update({

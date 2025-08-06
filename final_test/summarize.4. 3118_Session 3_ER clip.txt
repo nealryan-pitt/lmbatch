@@ -1,0 +1,13 @@
+<!-- LM Batch Processing Metadata
+processed_at: 2025-08-06T11:52:51.948932
+prompt_file: promptfiles/summarize.txt
+source_file: txtfiles/4. 3118_Session 3_ER clip.txt
+model: default
+temperature: 0.1
+max_tokens: 32000
+tokens_used: 4026
+-->
+
+<|channel|>analysis<|message|>We need concise summary under 150 words. Focus main points key info. The text is a transcript of therapy session discussing coping skills: distress tolerance, emotion regulation, distraction (nap, video games). Discuss sleep issues, all-nighters, impact on mood, importance of sleep hygiene. Therapist suggests talking to therapist about sleep, seeking sleep experts. Introduces savoring concept, focusing on positive moments, counteracting negative bias. Also mentions measuring distress level. So summary: talk about coping skills from bed, emotion regulation, distraction, sleep issues, therapy suggestions, savoring technique. Keep under 150 words.
+
+Let's craft ~120 words.<|end|><|start|>assistant<|channel|>final<|message|>The therapist explains two main coping styles that can be done from bed: **distress tolerance** (toughing out bad feelings) and **emotion‑regulation** (actively changing how you feel). The client shares simple tactics—taking a nap, watching shows, playing video games—to calm anger or frustration. They also discuss chronic sleep problems, noting that all‑nighters give temporary energy but leave them exhausted; the therapist stresses that consistent sleep is key to mood regulation and suggests consulting a sleep specialist and continuing therapy. Finally, the therapist introduces **savoring**—intentionally focusing on positive moments—to counteract the tendency to dwell on negatives, especially in depression or anxiety. The session ends with an assessment of current distress level.

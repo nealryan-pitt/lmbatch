@@ -32,7 +32,40 @@ processing:
   chunk_size: 8192
   
   # Maximum context length in tokens (input + output)
-  max_context_length: 3000
+  max_context_length: 16384
+
+# Context handling configuration
+context_handling:
+  # How to handle oversized content: fail, truncate, split, force
+  # "force" is recommended for therapeutic analysis to preserve content integrity
+  strategy: "force"
+  
+  # Auto-detect model context length from model presets
+  auto_detect: true
+  
+  # Safety margin to reserve for response and buffer
+  safety_margin: 500
+  
+  # Overlap tokens when splitting content
+  overlap_tokens: 300
+  
+  # Show warnings when truncating content
+  warn_on_truncation: true
+  
+  # Default context size to request from LM Studio
+  ctx_size: 16384
+
+# Model-specific context length presets (updated for larger therapeutic analysis)
+model_presets:
+  gpt-oss-20b: 16384
+  "openai/gpt-oss-20b": 16384
+  gpt-oss-120b: 16384
+  "openai/gpt-oss-120b": 16384
+  llama-3.3-70b: 32768
+  "meta/llama-3.3-70b": 32768
+  qwen2.5-72b-instruct: 32768
+  "qwen/qwen2.5-72b-instruct": 32768
+  default: 16384
 
 output:
   # Default output directory
